@@ -1,4 +1,4 @@
 # LegoRobotCode
 University Project
 
-Test
+The place that we are storing the code to be modified by the team

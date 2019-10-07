@@ -60,9 +60,6 @@ int GetDistance(){
 int CalculateAngleDifference(int angleArgument1, int angleArgument2){
 	// Calculates the actual difference between two angles
 	int difference = abs(angleArgument1 - angleArgument2);
-	if(difference > 180){ // Ensures that the smallest possible difference is the one returned
-		difference = 360 - difference;
-	}
 	return difference;
 }
 
@@ -127,66 +124,74 @@ void Stop(){
 
 void RotateLeft(int RotationDegrees){
     // Rotates the robot. Accomplished by rotating both drive engines in opposite direction
+	StartRotateLeft(25);
 	int startRotationAngle;
 	int currentAngle;
 	int AngleDifference;
+	startRotationAngle = GetRotation();
 	while(True){
+		currentAngle = GetRotation();
 		AngleDifference = CalculateAngleDifference(startRotationAngle, currentAngle);
-		if(AngleDifference == RotationDegrees){ // We have achieved the desired rotation
+		if(AngleDifference >= RotationDegrees){ // We have achieved the desired rotation
+			Stop();
 			break;
 		}
-		else{
-			if(IsSmaller(AngleDifference, RotationDegrees)){ // If we haven't rotated enough
-				StartRotateLeft(25);
-			}
-
-			else{ // We have rotated to much, we need to rotate back
-				StartRotateRight(25);
-			}
-		}
+		Wait(MS_100);
 	}
 }
 
 void RotateRight(int RotationDegrees){
     // Rotates the robot. Accomplished by rotating both drive engines in opposite direction
+	StartRotateRight(20);
 	int startRotationAngle;
 	int currentAngle;
 	int AngleDifference;
+	startRotationAngle = GetRotation();
 	while(True){
+		currentAngle = GetRotation();
 		AngleDifference = CalculateAngleDifference(startRotationAngle, currentAngle);
-		if(AngleDifference == RotationDegrees){ // We have achieved the desired rotation
+		if(AngleDifference >= RotationDegrees){ // We have achieved the desired rotation
+			Stop();
 			break;
 		}
-		else{
+		Wait(MS_100);
+	}
+}
 
-			if(IsSmaller(AngleDifference, RotationDegrees)){ // If we haven't rotated enough
-				StartRotateRight(25);
-			}
-
-			else{ // We have rotated to much, we need to rotate back
-				StartRotateLeft(25);
-			}
+void AlignWithWall(int gap){
+	LcdPrintf(1, "Aligning with the wall.");
+	int dis;
+	dis = readSensor(IN_1);
+	if (dis > gap){
+		OnRevSync(OUT_AD, 50);
+	}
+	while(1)
+	{
+		dis = readSensor(IN_1);
+		if(dis <= gap)
+		{
+			Stop();
+			break;
 		}
+		Wait(MS_100);
 	}
 }
 
 void RotateTo(int TargetRotation){
-	int StartRotation = GetRotation();
-	if(CalculateAngleDifference(StartRotation, TargetRotation) < CalculateAngleDifference(StartRotation + 1, TargetRotation)){
-		// Rotating to the left made the delta angle bigger --> Rotating to the right makes us reach the target angle fastest
-		StartRotateRight(25);
-		int angle;
-		while(angle != TargetRotation);
-			angle = GetRotation();
-	}
-	else{
-		// Either leftwise rotation makes us reach the target angle faster, or they're both equal (pretty unlikely)
-		StartRotateLeft(25);
-		int angle = GetRotation();
-		while(angle != TargetRotation){
-			angle = GetRotation();
+	LcdPrintf(1, "Setting the closest distance.\n");
+	// Rotating to the left made the delta angle bigger --> Rotating to the right makes us reach the target angle fastest
+	StartRotateRight(20);
+	int CurrentAng;
+	while(True) {
+		CurrentAng = GetRotation();
+		int RotationDiffrence = CurrentAng - TargetRotation;
+		if(RotationDiffrence <= 0){
+			Stop();
+			break;
 		}
+		Wait(MS_100);
 	}
+	AlignWithWall(200);
 }
 
 void EnsureDistanceToWallIsBetween(int Highest, int Smallest){
@@ -212,67 +217,68 @@ void DriveForwardPreciseDistance(double Distance, int speed){ // argument is in 
 
 	double angle = (972 / 32) * Distance;
 
-	RotateMotor(OUT_AD, speed, -angle);
+	RotateMotor(OUT_AD, -speed, angle);
 
 }
 
 void DropPayload(){
-
-	// TODO : Drop the book
+	Wait(SEC_1);
+	RotateMotor(OUT_C, -20, 130);
+	RotateMotor(OUT_C, 20, 130);
 
 }
 
 void ZeroToWall(){
+	LcdPrintf(1, "Looking for the closest wall.\n");
 	int BestRotation = GetRotation();
 	int BestDistance = GetDistance();
-	int StartingRotation = BestRotation;
-	int Lap = 0;
-	StartRotateRight(25);
+	int StartingRotation = GetRotation();
+	StartRotateLeft(20);
 	while(True){
 		int rotationCont = GetRotation();
 		int distanceCont = GetDistance();
-		if(distanceCont > BestDistance && rotationCont != BestRotation){ // If the robot finds a new best distance and rotation
+		int RotationDiffrence = CalculateAngleDifference(StartingRotation, rotationCont);
+		if(distanceCont < BestDistance){ // If the robot finds a new best distance and rotation
 			BestDistance = distanceCont;
 			BestRotation = rotationCont;
 		}
-		if(rotationCont == StartingRotation){
-			Lap++;
-		}
-		if(rotationCont == StartingRotation && Lap > 1){
+		if(RotationDiffrence >= 370){
 			Stop();
 			break;
 		}
+		Wait(MS_100);
 	}
 	RotateTo(BestRotation);
 }
 
 bool GoToDestination(int DestinationNumber){
 	ZeroToWall();
+	LcdPrintf(1, "Going along the wall.");
     if(DestinationNumber == 1 || DestinationNumber == 3){
-    	RotateRight(90);
-    	DriveForwardPreciseDistance(250);
-    	if(DestinationNumber == 1){
-        	RotateLeft(90);
+    	RotateRight(90 - 5);
+    	DriveForwardPreciseDistance(230, 50);
+    	ZeroToWall();
+    	RotateRight(180 - 3);
+    	if(DestinationNumber == 3){
+    		AlignWithWall(200);
+    		RotateLeft(90 - 5);
     	}
-    	else if(DestinationNumber == 3){
-        	RotateRight(90);
-    	}
-    	EnsureDistanceToWallIsBetween(10, 20);
+    	//EnsureDistanceToWallIsBetween(10, 20);
     	DropPayload();
     }
     else if(DestinationNumber == 2 || DestinationNumber == 4){
-    	RotateLeft(90);
-    	DriveForwardPreciseDistance(250);
-    	if(DestinationNumber == 2){
-        	RotateRight(90);
+    	RotateLeft(90 - 5);
+    	DriveForwardPreciseDistance(230, 50);
+    	ZeroToWall();
+    	RotateLeft(180 - 3);
+    	if(DestinationNumber == 4){
+        	AlignWithWall(200);
+        	RotateRight(90 - 5);
     	}
-    	else if(DestinationNumber == 4){
-        	RotateLeft(90);
-    	}
-    	EnsureDistanceToWallIsBetween(10, 20);
+    	//EnsureDistanceToWallIsBetween(10, 20);
     	DropPayload();
     }
-    else{ // Provided destination number is not registered
+    else { // Provided destination number is not registered
     	return 0; // Should be impossible, but just in case...
     }
     return 1;
@@ -286,19 +292,24 @@ int main(void)
 
 	int selectednumber = 0;
 
-	while(True){ // A loop that waits for one of the 4 buttons to be pressed, which designates which destination the robot should move to
-		if(ButtonIsDown(BUTTONUP) || ButtonIsDown(BUTTONRIGHT) || ButtonIsDown(BUTTONDOWN) || ButtonIsDown(BUTTONLEFT)){
-			if(ButtonIsDown(BUTTONUP)){
+	while(True) { // A loop that waits for one of the 4 buttons to be pressed, which designates which destination the robot should move to
+		if(ButtonIsDown(BTNUP) || ButtonIsDown(BTNRIGHT) || ButtonIsDown(BTNDOWN) || ButtonIsDown(BTNLEFT)){
+			sleep(1);
+			if(ButtonIsDown(BTNUP)){
 				selectednumber = 1;
+				LcdPrintf(1,"Task 1\n");
 			}
-			else if(ButtonIsDown(BUTTONRIGHT)){
+			else if(ButtonIsDown(BTNRIGHT)){
 				selectednumber = 2;
+				LcdPrintf(1,"Task 2\n");
 			}
-			else if(ButtonIsDown(BUTTONDOWN)){
+			else if(ButtonIsDown(BTNDOWN)){
 				selectednumber = 3;
+				LcdPrintf(1,"Task 3\n");
 			}
-			else if(ButtonIsDown(BUTTONLEFT)){
+			else if(ButtonIsDown(BTNLEFT)){
 				selectednumber = 4;
+				LcdPrintf(1,"Task 4\n");
 			}
 			else{
 				return 0; // Should be impossible, but just in case...
@@ -308,6 +319,7 @@ int main(void)
 	}
 
 	// Notifies you that a destination has been selected and that the robot will start moving in 4 seconds
+	/* Didn't get the sound to work, the error is that the PlaySound does not exist plus tested with PlayTone produced the same result
 	PlaySound(SOUND_DOUBLE_BEEP);
 	sleep(1);
 	PlaySound(SOUND_CLICK);
@@ -316,12 +328,11 @@ int main(void)
 	sleep(1);
 	PlaySound(SOUND_CLICK);
 	sleep(1);
-	PlaySound(SOUND_DOUBLE_BEEP);
+	PlaySound(SOUND_DOUBLE_BEEP);*/
 
 	// Starts moving
+	Wait(SEC_3);
 	GoToDestination(selectednumber);
-
-
 
 	FreeEV3();
 	return 0;
